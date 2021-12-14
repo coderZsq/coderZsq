@@ -2,17 +2,14 @@
 
 1. 两个整数相加;
 
-```swift
-class Solution {
-    func getSum(_ a: Int, _ b: Int) -> Int {
-        var a = a, b = b
-        while b != 0 { // 进位值为0 结束
-            let carry = (a & b) << 1 //取出进位
-            a = a ^ b // 无进位加法
-            b = carry // 循环
-        }
-        return a
+```cpp
+int getSum(int a, int b){
+    while (b != 0) {
+        int carry = (unsigned int)(a & b) << 1;
+        a = a ^ b;
+        b = carry;
     }
+    return a;
 }
 ```
 
@@ -148,34 +145,6 @@ Category和Class Extension的区别是什么?
 ```
 
 ```
-Category中有load方法吗?load方法是什么时候调用的?load 方法能继承吗?
-- 有load方法
-- load方法在runtime加载类、分类的时候调用
-- load方法可以继承，但是一般情况下不会主动去调用load方法，都是让系统自动调用
-*系统调用load方法是直接指针调用, 主动调用会走消息机制
-
-load、initialize方法的区别什么?它们在category中的调用的顺序?以及出现继承时他们之间的调用过程?
-- +load方法会在runtime加载类, 分类时调用
-- 每个类, 分类的+load, 在程序运行过程中系统只调一次
-
-调用顺序
-1. 先调用类的+load
-- 按照编译先后顺序调用 (先编译, 先调用)
-- 调用子类的+load之前会调用父类的+load
-2. 再调用分类的+load
-- 按照编译先后顺序调用 (先编译, 先调用)
-*顺序: 父类 -> 子类 -> 分类 (同级别先编译, 先调用)
-
-- +initialize方法在类第一次接收到消息时调用
-
-调用顺序
-- 先调用父类的+initialize, 再调用子类的+initialize
-- (先初始化父类, 再初始化子类, 每个类只会初始化1次)
-- +initialize和+load的很大区别是，+initialize是通过objc_msgSend进行调用的，所以有以下特点
-- 如果子类没有实现+initialize，会调用父类的+initialize(所以父类的+initialize可能会被调用多次)
-- 如果分类实现了+initialize，就覆盖类本身的+initialize调用
-*initialize走消息机制, 所以行为同消息机制
-
 Category能否添加成员变量?如果可以，如何给Category添加成员变量?
 - 不能直接给Category添加成员变量，但是可以间接实现Category有成员变量的效果
 *原因是分类数据结构没有定义字段, 可以使用关联对象绑定
@@ -263,7 +232,78 @@ iOS用什么方式实现对一个对象的KVO?(KVO的本质是什么?)
 5. 在经常放到where子句中的列上面创建索引，加快条件的判断速度。
 ```
 
-7. 算法, atoi -
+7. 算法, atoi
+
+```cpp
+#include <iostream>
+#include <string>
+
+using namespace std;
+
+class Solution {
+public:
+    int myAtoi(string str) {
+        unsigned long len = str.length();
+
+        // 去除前导空格
+        int index = 0;
+        while (index < len) {
+            if (str[index] != ' ') {
+                break;
+            }
+            index++;
+        }
+
+        if (index == len) {
+            return 0;
+        }
+
+        int sign = 1;
+        // 处理第 1 个非空字符为正负符号，这两个判断需要写在一起
+        if (str[index] == '+') {
+            index++;
+        } else if (str[index] == '-') {
+            sign = -1;
+            index++;
+        }
+
+        // 根据题目限制，只能使用 int 类型
+        int res = 0;
+        while (index < len) {
+            char curChar = str[index];
+            if (curChar < '0' || curChar > '9') {
+                break;
+            }
+
+            int num = (curChar - '0');
+
+            if (res > INT_MAX / 10 || (res == INT_MAX / 10 && num > INT_MAX % 10)) {
+                return INT_MAX;
+            }
+            if (res < INT_MIN / 10 || (res == INT_MIN / 10 && num > -(INT_MIN % 10))) {
+                return INT_MIN;
+            }
+
+            res = res * 10 + sign * num;
+            index++;
+        }
+        return res;
+    }
+};
+```
+
+```
+字符串的转换
+- 明确转化规则
+  - 空格处理
+  - 正负号处理
+  - 数字处理
+- [推入]数字
+  - result = result * 10 + num
+- 模式识别: 整数运算注意溢出
+  - 转换为INT_MAX的逆运算
+```
+
 8. autoreleasepool 实现原理
 9. 自旋锁, 互斥锁
 10. Swift, OC 差异 -
@@ -278,9 +318,53 @@ iOS用什么方式实现对一个对象的KVO?(KVO的本质是什么?)
 19. 重写 isEqual 方法，hash 方法的作用，引出 NSSet 的读写效率比较高 -
 20. performselector 和直接调用方法哪个执行快
 21. 为什么一个线程只能有一个 runloop
-22. 子线程的 runloop 开启后，如果不做任何操作，线程会被杀死吗？ -
+22. 子线程的 runloop 开启后，如果不做任何操作，线程会被杀死吗？
+
+```
+答案: 会
+
+如果Mode里没有任何Source0/Source1/Timer/Observer，RunLoop会立马退出
+
+```
+
 23. load 方法是在什么时候调用的
+
+```
+答案: load方法在runtime加载类、分类的时候调用
+
+Category中有load方法吗?load方法是什么时候调用的?load 方法能继承吗?
+- 有load方法
+- load方法在runtime加载类、分类的时候调用
+- load方法可以继承，但是一般情况下不会主动去调用load方法，都是让系统自动调用
+*系统调用load方法是直接指针调用, 主动调用会走消息机制
+
+load、initialize方法的区别什么?它们在category中的调用的顺序?以及出现继承时他们之间的调用过程?
+- +load方法会在runtime加载类, 分类时调用
+- 每个类, 分类的+load, 在程序运行过程中系统只调一次
+
+调用顺序
+1. 先调用类的+load
+- 按照编译先后顺序调用 (先编译, 先调用)
+- 调用子类的+load之前会调用父类的+load
+2. 再调用分类的+load
+- 按照编译先后顺序调用 (先编译, 先调用)
+*顺序: 父类 -> 子类 -> 分类 (同级别先编译, 先调用)
+```
+
 24. initialize 方法是干嘛用的？是什么时候调用的 -
+
+```
+答案 +initialize方法在类第一次接收到消息时调用
+
+调用顺序
+- 先调用父类的+initialize, 再调用子类的+initialize
+- (先初始化父类, 再初始化子类, 每个类只会初始化1次)
+- +initialize和+load的很大区别是，+initialize是通过objc_msgSend进行调用的，所以有以下特点
+- 如果子类没有实现+initialize，会调用父类的+initialize(所以父类的+initialize可能会被调用多次)
+- 如果分类实现了+initialize，就覆盖类本身的+initialize调用
+*initialize走消息机制, 所以行为同消息机制
+```
+
 25. repeated 的 NSTimer 有什么性能问题
 26. 算法：二叉树的左右子树交换代码实现； -
 27. 页面路由如何实现，如何去维护一张路由表；页面是如何去进行跳转的（runtime）；路由表中的键和值分别是什么？如何根据服务器下发的数据加载页面； -
