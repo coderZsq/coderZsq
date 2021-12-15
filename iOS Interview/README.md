@@ -269,6 +269,7 @@ __AtAutoreleasePool {
 ```
 autoreleasepool 行为逻辑
 
+嵌套时:
 - 调用push方法会将一个POOL_BOUNDARY入栈，并且返回其存放的内存地址
 - 调用pop方法时传入一个POOL_BOUNDARY的内存地址，会从最后一个入栈的对象开始发送release消息，直到遇到这个
    POOL_BOUNDARY
@@ -994,27 +995,195 @@ hitTest: Test确定用户触摸的是哪一个UIView
 6. 如果触摸点在 view 中，逆序遍历它的子 View ，重复上面的过程，如果子View没有subView了，那子View就是hit-TestView。
 7. 如果 view 的 子view 都返回 nil（都不是 hit-TestVeiw ），那么返回自身（自身是 hit-TestView ）。
 
+当一个view被add到superView上的时候，他的nextResponder属性就会被指向它的superView
+
 pointInSide: 点击的点是否在矩形框内
 
 *事件捕获是从 Window 开始逐级遍历找到 View
 *事件响应式从 View 开始调用next响应者 到 Window -> Application -> AppDelegate
 ```
 
-35. 深拷贝与浅拷贝；-
-36. 属性有哪些修饰符 -
-37. 将一个 NSArray 赋值给一个 copy 修饰的 NSMutableArray 属性，然后尝试向这个可变数组添加对象，会发生什么？ -
-38. Category 同名方法 -
+35. 深拷贝与浅拷贝
+
+```
+答案:
+
+深拷贝是会拷贝指针指向新申请的内存
+浅拷贝是仅拷贝指针
+
+[NSXXX copy] 会进行浅拷贝, 因为不可变所以只需要一份指针, 享元模式
+[NSMutableXXX  copy] 会进行深拷贝
+[NSXXX mutablecopy] 会进行深拷贝
+[NSMutableXXX mutablecopy] 会进行深拷贝
+
+只要和mutable相关, 只要会修改 都需要深拷贝
+```
+
+36. 属性有哪些修饰符
+
+```
+答案:
+
+MRC：nonatomic,atomic,retain,assign,copy,readwrite,readonly
+ARC：nonatomic,atomic,strong,weak,assign,copy,readwrite,readonly
+
+nonatomic (多线程访问不安全, UI线程在主线程无资源竞争, 不需要加锁)
+- nonatomic 表示非原子属性
+- 并发访问性能高，但是访问不安全
+- 它直接访问内存中的地址，不关心其他线程是否在改变这个值，并且中间没有死锁保护；所以可能拿不到完整的值
+
+atomic
+- atomic 表示原子属性
+- 系统生成的 getter/setter 会保证 get、set 操作的完整性，不受其他线程影响
+- 系统生成的 getter/setter 方法中，使用了 @synchronized(self)
+- 如果一个线程正在执行 getter/setter，其他线程就得等待
+- 如果有另一个线程同时在调 [property release]，那可能就会crash，因为 release 不受 getter/setter 操作的限制。
+- 也就是说，atomic 修饰的属性只能说是读/写安全的，但并不是线程安全的
+- 因为别的线程还能进行读写之外的其他操作。
+- 线程安全需要开发者自己来保证。
+- 系统默认的属性是 atomic
+
+strong
+- strong 表示对对象的强引用
+- 强引用时，引用计数会 +1
+- 给 strong 属性赋值时，setter 方法中会先 release 旧值再 retain 新值并赋值
+- 两个对象之间相互强引用会造成循环引用，内存泄漏
+
+weak
+- weak 表示对象的弱引用
+- 弱引用时，不会使传入的对象计数+1
+- 被其修饰的对象随时可能被系统销毁回收
+- 当该对象的引用计数为 0，则会被回收，对象被释放以后，weak 指针会被自动设置为 nil
+- 在OC的运行时环境中，维护了一种 weak 表（哈希表）
+- 这张哈希表用对象的首地址作为 key，用 weak 指针自身的地址组成的数组作为 value
+- 当对象被释放后，通过这个对象的起始地址来找到所有指向它的 weak 指针，并将它们指向nil
+- weak 多用于避免循环引用
+
+assign
+- assign 主要用于修饰基本数据类型
+- 包括OC基本数据类型（NSInteger，CGFloat）和C数据类型（int, float, double, char）
+- 基本数据类型存储在栈中，内存不用程序员管理。
+- assign 也可以修饰对象，但是当对象被释放后，指针依然指向之前的内存地址。
+- 此时，访问被释放的地址就会 crash
+- 这个已经被释放了的对象被称为 僵尸对象
+- assign 在 MRC 和 ARC 下都可以使用
+
+retain
+- 在 MRC 下使用，用于修饰对象
+- 被 retain 修饰的对象，retainCount要+1
+- retain 只能修饰 OC 对象，不能修饰非 OC 对象（如 Core Foundation 对象）
+- retain 会增加对象的引用计数，而基本数据类型或者 Core Foundation 对象都没有引用计数
+- 赋值时，先 release 旧值，再 retain 新值
+
+copy 表示在赋值时使用传入值的一份拷贝
+- 赋值时，创建了一个新的对象，并将传入对象的值全部拷贝到新对象
+- 赋值后，新对象的 retainCount 为 1，而旧对象的 retainCount 不变
+- 只能修饰对象类型，不能修饰基础数据类型
+- 用copy修饰的对象，必须实现
+- NSCopying 协议，也就是实现方法 -(id)copyWithZone:(nullable NSZone *)zone
+- 系统自动生成的 setter 方法中会调用这个方法
+- 至于 copy 是深拷贝还是浅拷贝完全是看 copyWithZone 的实现方式，copy 修饰符和深拷贝、浅拷贝没有关系
+- 一般用于修饰不可变的属性（NSArray,NSDictionary,NSString,block）
+- 即使用 copy 修饰 NSMutableArray，将一个可变 NSMutableArray 赋值给 copy 修饰的属性也会变成不可变数组 NSArray
+- 若 a 被 copy 修饰，则 a = b 等价于 a = [b copy]。
+- 为什么要用 copy 修饰 NSString ？
+如果用 retain 修饰 NSString，
+当把 NSMutableString 赋值给 NSString 时，只是拷贝了指针；
+如果赋值后源字符串改变，这个属性值也跟着改变。（不可控）
+如果用 copy 修饰 NSString，
+当把 NSMutableString 赋值给 NSString 时，会生成一份拷贝内容；
+即使赋值后源字符串改变，这个属性值也不会改变。（保证了安全）
+
+readwrite
+- readwrite 表示该属性可读可写
+- 系统会自动创建 setter 和 getter 方法
+- readwrite 是默认的属性修饰符
+
+readonly
+- readonly 表示该属性只可读，不可写
+- 只会生成get方法
+- 对用 readonly 修饰的属性赋值时，编译器会报错提示：“Assignment to readonly property”。
+```
+
+37. 将一个 NSArray 赋值给一个 copy 修饰的 NSMutableArray 属性，然后尝试向这个可变数组添加对象，会发生什么？
+
+```
+答案:
+
+直接崩溃, 报找不到添加对象的方法, 找不到 selector
+
+原因:
+[NSMutableArray copy] -> NSArray, NSArray 没有添加对象的方法
+```
+
+38. Category 同名方法
+
+```
+答案:
+
+会覆盖宿主类的同名方法, 原因是 Category是Runtime时加载运行, 头插法合成原对象ro -> rw.
+```
+
 39. Extention 可以有多个吗？
-40. Category 多个同名方法怎么进行 Method swizzing -
-41. GCD 串行队列和并行队列执行顺序分析 -
-42. NSOperator 执行顺序分析，maxConcurrent 为 2 或者 1 两种情况 -
-43. 100 亿个数求 top k，算法复杂度，怎么在算法最优的情况下再快 100 倍？-
-44. KVO 的实现原理，一个类的多次 kvo 会生成多个新类吗？是直接就对所有的属性都生成 kvo 的方法吗？-
+
+```
+答案 : 可以有多个
+
+不管有几个都会合成到宿主类的 ro 里, 多个的好处可以用来隔离关注点
+```
+
+40. Category 多个同名方法怎么进行 Method swizzing
+
+```
+答案:
+结论：两个Category中，若swizzling自定义方法名相同，则自定义的方法不会调用。因为两次交换IMP正好不变。
+结论：两个Category中，如swizzling自定义方法名不同，则自定义的方法都会被调用，调用顺序Compile Sources中在后边的先调用。(需要主动调用 原方法)
+```
+
+41. GCD 串行队列和并行队列执行顺序分析
+
+```
+答案:
+
+- 只要是同步都是串行执行, 不开启新线程
+- 异步的话, 非主队列均会开启线程
+- async(mainqueue), 会把任务放入主队列后依次执行
+
+```
+
+42. NSOperator 执行顺序分析，maxConcurrent 为 2 或者 1 两种情况
+
+```
+答案:
+
+maxConcurrent 为 2, 的话 每两个可能会乱序执行
+maxConcurrent 为 1, 就是串行队列
+```
+
+43. 100 亿个数求 top k，算法复杂度，怎么在算法最优的情况下再快 100 倍？
+
+```
+答案:
+
+- 如果是算法最优就不可能再快了
+- 最小堆 + 分治
+- 看内存读取批次, 批次入堆, 或者使用多线程进程机器 进行 mapreduce.
+```
+
+44. KVO 的实现原理，一个类的多次 kvo 会生成多个新类吗？是直接就对所有的属性都生成 kvo 的方法吗？
+
 45. http 返回码有哪些，206 返回码，断点续传
 46. https 握手原理，能确保安全吗 -
 47. runloop 原理，几种 mode -
 48. autoreleasepool 原理？如果对一个对象写了多次 autorelease，会怎样？ -
 49. weak table 是用的什么数据结构
+
+```
+答案:
+
+哈希表 (O1)
+```
+
 50. block 几种内存类型，如何捕获变量
 51. 注意 copy 和 mutableCopy 方法，有陷阱，
 52. @synchronized(xxx)的实现
@@ -1053,5 +1222,35 @@ func write() {
 
 54. 实现 Power()函数
 55. TCP 的断包粘包如何避免
+
+```
+答案;
+
+粘包现象: 一次接收到两条消息
+断包现象: 一次消息分多个包接收
+
+粘包的主要原因:
+
+- 发送方每次写入数据 < 套接字缓冲区大小
+- 接收方读取套接字缓冲区数据不够及时
+
+断包的主要原因:
+- 发送方写入数据 > 套接字缓冲区大小
+- 发送的数据大于协议的MTU(最大传输单元), 必须拆包
+
+换个角度看:
+
+- 收发
+  - 一个发送可能被多次接收, 多个发送可能被一次接收
+- 传输
+  - 一个发送可能占用多个传输包, 多个发送可能共用一个传输包
+
+原因:
+
+TCP是流式协议, 消息无边界.
+
+提醒: UDP像邮寄的包裹, 虽然一次运输多个, 但每个包裹都有"界限", 一个一个签收, 所以无粘包, 断包问题
+```
+
 56. OC 消息机制
 57. iOS 启动流程
