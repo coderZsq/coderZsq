@@ -741,7 +741,7 @@ struct TreeNode* invertTree(struct TreeNode* root) {
 ```
 1. 哈希表
 2. 协议
-3. 中间者模式 CTMediator + 组件化使用 category Runtime解耦 使用 Proxy
+3. 中间者模式 CTMediator + 组件化使用 category Runtime(反射)解耦 使用 Proxy
 4. 字典树
 ```
 
@@ -783,8 +783,58 @@ NSOperation 的队列可以 cancel 吗，里面的任务可以 cancel 吗；
 30. block 和 self 的循环引用；到底是如何循环引用的；
 
 ```
+答案: 可以使用 __weak 进行单边打破, 或者使用__block调用手动打破
+
+循环引用是 由于对象持有了block, block又捕获了self
+```
+
+```
+Block_layout : {
+  isa: (void*)
+  flags: (int)
+  reserved: (int)
+  invoke: (void*(void *, ...)) // *FuncPtr
+  descriptor: (struct Block_descriptor *) {
+    reserved: (unsigned long int)
+    size: (unsigned long int)
+    copy: (void *(void *, void *))
+    dispose: (void *(void *))
+  }
+  variables... (capture) // 捕获局部变量, 不捕获全局变量
+}
+```
+
+```
+变量捕获
+
+auto: 值传递
+static: 引用传递
+全局变量: 直接访问
+
+__block.__forwarding在copy的时候会指向堆中的__block
+```
+
+```
+block的类型
+
+- block有3种类型，可以通过调用class方法或者isa指针查看具体类型，最终都是继承自NSBlock类型
+- __NSGlobalBlock__ ( 没有访问auto变量 ) 数据区 // 什么都不做
+- __NSStackBlock__ ( 访问了auto变量 ) 栈区 // copy 从栈复制到堆
+- __NSMallocBlock__ ( __NSMallocBlock__调用了copy ) 堆区 // copy 引用计数增加
+
+block 的 copy
+- 在ARC环境下，编译器会根据情况自动将栈上的block复制到堆上，比如以下情况
+- block作为函数返回值时
+- 将block赋值给__strong指针时
+- block作为Cocoa API中方法名含有usingBlock的方法参数时
+- block作为GCD API的方法参数时
+*ARC下需要持有block, 会进行copy
+```
+
+```
 block的原理是怎样的? 本质是什么?
 - 封装了函数调用以及调用环境的OC对象, 就是闭包的一种实现
+- 本质上也是一个OC对象, 它内部也有个isa指针
 
 __block的作用是什么?有什么使用注意点?
 
@@ -891,6 +941,28 @@ if (runLoopActivity == kCFRunLoopBeforeSources || runLoopActivity == kCFRunLoopA
 ```
 
 33. 讲讲 iOS 动画，比如 CoreAnimation；
+
+```
+CoreAnimation翻译过来就是核心动画,一组非常强大的API，用来做动画的，非常的简单，但是效果非常绚丽
+CoreAnimation是跨平台的，既可以支持IOS，也支持MAC OS
+CoreAnimation执行动画是在后台，不会阻塞主线程
+CoreAnimation作用在CALayer，不是UIView
+
+CALayer
+
+应用使用CA有三组图层对象，每组图层对象在显示内容到屏幕上扮演的角色不同：
+- 图层模型树（或称图层树）是应用交互最多的，对象在此树中存储动画的目标值，当改变图层的属性，使用这些对象中的一个
+- 表现层树包含任一正在运行动画的值，此树中的对象你不能修改。但你可以用这些对象去读取当前动画的值，可利用这些值作为一个动画的起始。
+- 渲染树执行实际的动画且是CA所私有的
+- 当然图层组织的层级结构如视图类似，实际上，图层的初始结构与视图的初始结构相一致，有时你可以使用图层代替视图减少消耗。
+- 对于图层树中的每个对象会匹配表现层树和渲染层树中的一个对象，应用主要工作的对象是图层中，但也可能通过`presentationLayer`属性访问
+表现层树中的对象
+
+动画组
+关键帧动画
+平移缩放旋转
+```
+
 34. 屏幕上点击一个 View，事件是如何去响应的； -
 35. 深拷贝与浅拷贝；-
 36. 属性有哪些修饰符 -
