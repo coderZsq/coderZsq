@@ -68,7 +68,6 @@ iOS在主线程的Runloop中注册了2个Observer
 
 ```
 答案: 会直接被category中的方法覆盖
-
 ```
 
 ```
@@ -974,7 +973,33 @@ CALayer // 基本UIView类似属性, 可使用CGImage填充, 控制颜色, 位�
 平移缩放旋转
 ```
 
-34. 屏幕上点击一个 View，事件是如何去响应的； -
+34. 屏幕上点击一个 View，事件是如何去响应的；
+
+```
+往往在子view超出父view时，超出的部分不会响应点击事件
+原因就在于：iOS的事件响应机制
+
+iOS的事件响应机制
+
+- 用户触摸屏幕时，UIKit会生成UIEvent对象来描述触摸事件。对象内部包含了触摸点坐标等信息。
+- 通过Hit Test确定用户触摸的是哪一个UIView。这个步骤通过- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event方法来完成。
+- 找到被触摸的UIView之后，如果它能够响应用户事件，相应的响应函数就会被调用。如果不能响应，就会沿着响应链（Responder Chain）寻找能够响应的UIResponder对象（UIView是UIResponder的子类）来响应触摸事件。
+
+hitTest: Test确定用户触摸的是哪一个UIView
+1. 从视图层级最底层的 window 开始遍历它的子 View。
+2. 默认的遍历顺序是按照 UIView 中 Subviews 的逆顺序。
+3. 找到 hit-TestView 之后，寻找过程就结束了。
+4. 如果 View 的 userInteractionEnabled = NO，enabled = NO（ UIControl ），或者 alpha <= 0.01， hidden = YES 直接返回 nil（不再往下判断）。
+5. 如果触摸点不在 view 中 (pointInSide)，直接返回 nil。
+6. 如果触摸点在 view 中，逆序遍历它的子 View ，重复上面的过程，如果子View没有subView了，那子View就是hit-TestView。
+7. 如果 view 的 子view 都返回 nil（都不是 hit-TestVeiw ），那么返回自身（自身是 hit-TestView ）。
+
+pointInSide: 点击的点是否在矩形框内
+
+*事件捕获是从 Window 开始逐级遍历找到 View
+*事件响应式从 View 开始调用next响应者 到 Window -> Application -> AppDelegate
+```
+
 35. 深拷贝与浅拷贝；-
 36. 属性有哪些修饰符 -
 37. 将一个 NSArray 赋值给一个 copy 修饰的 NSMutableArray 属性，然后尝试向这个可变数组添加对象，会发生什么？ -
@@ -1029,3 +1054,4 @@ func write() {
 54. 实现 Power()函数
 55. TCP 的断包粘包如何避免
 56. OC 消息机制
+57. iOS 启动流程
