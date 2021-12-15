@@ -52,6 +52,19 @@ Runloop 的 mode
 ```
 
 ```
+autorelease 的释放时机
+
+答案: 当 RunLoop 处于 kCFRunLoopBeforeWaiting, kCFRunLoopBeforeExit时释放
+
+iOS在主线程的Runloop中注册了2个Observer
+- 第1个Observer监听了kCFRunLoopEntry事件，会调用objc_autoreleasePoolPush()
+- 第2个Observer
+  - 监听了kCFRunLoopBeforeWaiting事件，会调用objc_autoreleasePoolPop()、objc_autoreleasePoolPush()
+  - 监听了kCFRunLoopBeforeExit事件，会调用objc_autoreleasePoolPop()
+
+```
+
+```
 Runloop 运行逻辑
 
 1. 通知Observers: kCFRunLoopEntry
@@ -101,12 +114,6 @@ Runloop 休眠原理
 - 操作系统用户态到内核态的切换
 - 内核态进程切换为不活跃
 
-```
-
-```
-autorelease 的释放时机
-
-答案: 当 RunLoop 处于 kCFRunLoopBeforeWaiting 时释放
 ```
 
 3. runtime 的 category 中实现了跟他一样的一个方法会怎么样？
@@ -173,6 +180,7 @@ AssociationsManager {             // 单例对象
 kvo 的实现
 
 答案: 用Runtime动态生成一个子类,并让instance对象isa指向这个全新的子类
+*类似Java动态代理CGLib的设计思路, 是一种Proxy模式
 
 有没有遇到过崩溃
 
@@ -235,61 +243,47 @@ iOS用什么方式实现对一个对象的KVO?(KVO的本质是什么?)
 7. 算法, atoi
 
 ```cpp
-#include <iostream>
-#include <string>
-
-using namespace std;
-
-class Solution {
-public:
-    int myAtoi(string str) {
-        unsigned long len = str.length();
-
-        // 去除前导空格
-        int index = 0;
-        while (index < len) {
-            if (str[index] != ' ') {
-                break;
-            }
-            index++;
+int myAtoi(char * s){
+    unsigned long len = strlen(s);
+    // 去除前导空格
+    int index = 0;
+    while (index < len) {
+        if (s[index] != ' ') {
+            break;
         }
-
-        if (index == len) {
-            return 0;
-        }
-
-        int sign = 1;
-        // 处理第 1 个非空字符为正负符号，这两个判断需要写在一起
-        if (str[index] == '+') {
-            index++;
-        } else if (str[index] == '-') {
-            sign = -1;
-            index++;
-        }
-
-        // 根据题目限制，只能使用 int 类型
-        int res = 0;
-        while (index < len) {
-            char curChar = str[index];
-            if (curChar < '0' || curChar > '9') {
-                break;
-            }
-
-            int num = (curChar - '0');
-
-            if (res > INT_MAX / 10 || (res == INT_MAX / 10 && num > INT_MAX % 10)) {
-                return INT_MAX;
-            }
-            if (res < INT_MIN / 10 || (res == INT_MIN / 10 && num > -(INT_MIN % 10))) {
-                return INT_MIN;
-            }
-
-            res = res * 10 + sign * num;
-            index++;
-        }
-        return res;
+        index++;
     }
-};
+    if (index == len) {
+        return 0;
+    }
+    int sign = 1;
+    // 处理第 1 个非空字符为正负符号，这两个判断需要写在一起
+    if (s[index] == '+') {
+        index++;
+    } else if (s[index] == '-') {
+        sign = -1;
+        index++;
+    }
+    // 根据题目限制，只能使用 int 类型
+    int res = 0;
+    while (index < len) {
+        char curChar = s[index];
+        if (curChar < '0' || curChar > '9') { // 如果不是数字, 则直接判定转换失败
+            break;
+        }
+        int num = (curChar - '0'); // 减去ascii表, 获取number
+        if (res > INT_MAX / 10 || (res == INT_MAX / 10 && num > INT_MAX % 10)) {
+            return INT_MAX;
+        }
+        if (res < INT_MIN / 10 || (res == INT_MIN / 10 && num > -(INT_MIN % 10))) {
+            return INT_MIN;
+        }
+        res = res * 10 + sign * num;
+        index++;
+    }
+    return res;
+
+}
 ```
 
 ```
@@ -305,7 +299,148 @@ public:
 ```
 
 8. autoreleasepool 实现原理
+
+```
+// 自动释放池的主要底层数据结构是:__AtAutoreleasePool、AutoreleasePoolPage
+// 调用了autorelease的对象最终都是通过AutoreleasePoolPage对象来管理的
+__AtAutoreleasePool {
+  currentPage: AutoreleasePoolPage { // 每个AutoreleasePoolPage对象占用4096字节内存 4kb
+    magic: magic_t
+    *next: id // 指向了下一个能存放autorelease对象地址的区域
+    thread: pthread_t
+    parent: AutoreleasePoolPage // 双向链表
+    child: AutoreleasePoolPage  // 双向链表
+    depth: uint32_t
+    hiwat: uint32_t
+    ... 剩下的空间用来存放 autorelease 对象的地址
+  }
+}
+- 每个AutoreleasePoolPage对象占用4096字节内存，除了用来存放它内部的成员变量，剩下的空间用来存放 autorelease对象的地址
+- 所有的AutoreleasePoolPage对象通过双向链表的形式连接在一起
+```
+
+```
+autoreleasepool 行为逻辑
+
+- 调用push方法会将一个POOL_BOUNDARY入栈，并且返回其存放的内存地址
+- 调用pop方法时传入一个POOL_BOUNDARY的内存地址，会从最后一个入栈的对象开始发送release消息，直到遇到这个
+   POOL_BOUNDARY
+*双向链表的结构 + 栈的内存管理模式
+```
+
 9. 自旋锁, 互斥锁
+
+```
+答案
+
+自旋锁: 等待锁的线程会处于忙等状态, 一直占用CPU资源, 不进行线程切换
+互斥锁: 等待锁的线程会处于休眠状态, 进行线程切换
+*关注点: 操作系统的线程调度算法
+
+什么情况使用自旋锁比较划算?
+1. 预计线程等待锁的时间很短
+2. 加锁的代码(临界区)经常被调用，但竞争情况很少发生
+3. CPU资源不紧张
+4. 多核处理器
+
+什么情况使用互斥锁比较划算?
+1. 预计线程等待锁的时间较长
+2. 单核处理器
+3. 临界区有IO操作
+4. 临界区代码复杂或者循环量大
+5. 临界区竞争非常激烈
+
+*关注点, 加锁临界区的等待操作系统响应时间短的 使用自旋锁, 时间长的用互斥锁,
+```
+
+```
+线程同步方案:
+
+自旋锁:
+- OSSpinLock ”自旋锁”，等待锁的线程会处于忙等(busy-wait)状态，一直占用着CPU资源 (目前已经不再安全，可能会出现优先级反转问题)
+如果等待锁的线程优先级较高，它会一直占用着CPU资源，优先级低的线程就无法释放锁
+
+互斥锁:
+- os_unfair_lock 从iOS10开始才支持
+从底层调用看，等待os_unfair_lock锁的线程会处于休眠状态，并非忙等
+
+- pthread_mutex
+”互斥锁”，等待锁的线程会处于休眠状态
+
+- NSLock // 对mutex普通锁的封装
+- NSRecursiveLock // 也是对mutex递归锁的封装，API跟NSLock基本一致
+- NSCondition // 是对mutex和cond的封装
+- NSConditionLock // 是对NSCondition的进一步封装，可以设置具体的条件值
+
+- @synchronized // @synchronized是对mutex递归锁的封装
+@synchronized(obj)内部会生成obj对应的递归锁，然后进行加锁、解锁操作
+
+信号量: IPC进程间通信
+- dispatch_semaphore
+信号量的初始值，可以用来控制线程并发访问的最大数量
+信号量的初始值为1，代表同时只允许1条线程访问资源，保证线程同步
+
+串行队列:
+- dispatch_queue(DISPATCH_QUEUE_SERIAL)
+直接使用GCD的串行队列，也是可以实现线程同步的
+```
+
+```
+线程同步方案性能比较:
+1. os_unfair_lock
+2. OSSpinLock
+3. dispatch_semaphore
+4. pthread_mutex
+5. dispatch_queue(DISPATCH_QUEUE_SERIAL)
+6. NSLock
+7. NSCondition
+8. pthread_mutex(recursive)
+9. NSRecursiveLock
+10. NSConditionLock
+11. @synchronized
+```
+
+```
+atomic
+
+atomic用于保证属性setter、getter的原子性操作，相当于在getter和setter内部加了线程同步的锁
+它并不能保证使用属性的过程是线程安全的
+*锁的粒度的把握
+
+func foo() { // foo 函数没加锁, 不能保证使用属性的过程是线程安全的
+  property.read()
+  property.write()
+}
+
+func read() {
+  lock // 自旋锁
+  read()
+  unlock // 自旋锁
+}
+
+func write() {
+  lock // 自旋锁
+  write()
+  unlock // 自旋锁
+}
+```
+
+```
+读写安全方案:
+
+同一时间，只能有1个线程进行写的操作
+同一时间，允许有多个线程进行读的操作
+同一时间，不允许既有写的操作，又有读的操作
+
+上面的场景就是典型的“多读单写”，经常用于文件等数据的读写操作，iOS中的实现方案有
+
+1. pthread_rwlock:读写锁 // 等待锁的线程会进入休眠
+2. dispatch_barrier_async:异步栅栏调用
+
+- 这个函数传入的并发队列必须是自己通过dispatch_queue_cretate创建的
+- 如果传入的是一个串行或是一个全局的并发队列，那这个函数便等同于dispatch_async函数的效果
+```
+
 10. Swift, OC 差异 -
 11. HTTPS 加密与身份验证
 12. TCP, UDP 区别 -
