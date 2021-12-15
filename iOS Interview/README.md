@@ -948,7 +948,18 @@ CoreAnimation是跨平台的，既可以支持IOS，也支持MAC OS
 CoreAnimation执行动画是在后台，不会阻塞主线程
 CoreAnimation作用在CALayer，不是UIView
 
-CALayer
+动画组, 帧动画, 缓冲曲线, 贝塞尔曲线
+
+CALayer // 基本UIView类似属性, 可使用CGImage填充, 控制颜色, 位置, 动画等
+- CATextLayer // 绘制String或者AttributeString
+- CAShapeLayer // 具有path属性, 与图形上下文类似属性
+- CAGradientLayer // 梯度层, 颜色渐变
+- CAEmitterLayer // 发射器层, 控制粒子或散列效果
+- CAEAGLayer // OpenGL ES绘制的层
+- CAReplicationLayer // 用来自动赋值subLayer
+- CAScrollLayer // 管理可滑动区域
+- CATiledLayer // 管理一副可以分割的大图
+- CATransformLayer // 渲染3D Layer层级
 
 应用使用CA有三组图层对象，每组图层对象在显示内容到屏幕上扮演的角色不同：
 - 图层模型树（或称图层树）是应用交互最多的，对象在此树中存储动画的目标值，当改变图层的属性，使用这些对象中的一个
