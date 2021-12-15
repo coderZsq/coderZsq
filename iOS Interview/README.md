@@ -35,8 +35,8 @@ Runloop 的 mode
       - kCFRunLoopEntry          // 即将进入Loop
       - kCFRunLoopBeforeTimers   // 即将处理Timer
       - kCFRunLoopBeforeSources  // 即将处理Source
-      - kCFRunLoopBeforeWaiting  // 即将进入休眠 + UI刷新 + Autorealease pool
-      - kCFRunLoopAfterWaiting   // 刚从休眠中唤醒
+      - kCFRunLoopBeforeWaiting  // 即将进入休眠 + UI刷新 + Autorealease pool // 等待 mach_port消息
+      - kCFRunLoopAfterWaiting   // 刚从休眠中唤醒 // 接收 mach_port消息
       - kCFRunLoopExit           // 即将退出Loop
       - kCFRunLoopAllActivities
   - mode UITrackingRunLoopMode: 界面跟踪 Mode，用于 ScrollView 追踪触摸滑动，保证界面滑动时不受其他 Mode 影响
@@ -61,58 +61,6 @@ iOS在主线程的Runloop中注册了2个Observer
 - 第2个Observer
   - 监听了kCFRunLoopBeforeWaiting事件，会调用objc_autoreleasePoolPop()、objc_autoreleasePoolPush()
   - 监听了kCFRunLoopBeforeExit事件，会调用objc_autoreleasePoolPop()
-
-```
-
-```
-Runloop 运行逻辑
-
-1. 通知Observers: kCFRunLoopEntry
-2. 通知Observers: kCFRunLoopBeforeTimers
-3. 通知Observers: kCFRunLoopBeforeSources
-4. 处理Blocks
-5. 处理Source0 (可能会再次处理Blocks)
-6. 如果存在Source1，就跳转到第8步
-7. 通知Observers: kCFRunLoopBeforeWaiting(等待消息唤醒)
-8. 通知Observers: kCFRunLoopAfterWaiting(被某个消息唤醒)
-  1> 处理Timer
-  2> 处理GCD Async To Main Queue
-  3> 处理Source1
-9. 处理Blocks
-10. 根据前面的执行结果，决定如何操作
-  1> 回到第02步
-  2> 退出Loop
-11. 通知Observers: kCFRunLoopExit
-
-```
-
-```
-Runloop 应用范畴
-
-- 定时器(Timer)、PerformSelector
-- GCD Async Main Queue
-- 事件响应、手势识别、界面刷新
-- 网络请求
-- AutoreleasePool
-
-Runloop 基本作用
-
-- 保持程序的持续运行
-- 处理App中的各种事件(比如触摸事件、定时器事件等)
-- 节省CPU资源，提高程序性能:该做事时做事，该休息时休息
-
-Runloop 实际应用
-
-- 控制线程声明周期 (线程保活)
-- 解决NSTimer在滑动时停止工作的问题
-- 监控应用卡顿
-- 性能优化
-
-Runloop 休眠原理
-
-- mach_msg()
-- 操作系统用户态到内核态的切换
-- 内核态进程切换为不活跃
 
 ```
 
@@ -372,9 +320,6 @@ autoreleasepool 行为逻辑
 - NSCondition // 是对mutex和cond的封装
 - NSConditionLock // 是对NSCondition的进一步封装，可以设置具体的条件值
 
-- @synchronized // @synchronized是对mutex递归锁的封装
-@synchronized(obj)内部会生成obj对应的递归锁，然后进行加锁、解锁操作
-
 信号量: IPC进程间通信
 - dispatch_semaphore
 信号量的初始值，可以用来控制线程并发访问的最大数量
@@ -598,21 +543,125 @@ swnd, send window: 发送窗口 swnd = min(cwnd, rwnd)
     - 然后开始执行拥塞避免算法("加法增大"), 使拥塞窗口缓慢地线性增大
 ```
 
-14. SDWebImage -
-15. 图片解码 -
-16. 指针混淆 -
+14. SDWebImage
+
+![](./SDWebImage/SDWebImageHighLevelDiagram.jpg)
+
+```
+- Image Manager
+  - Image Cache
+    - Memory
+    - Disk
+  - Image Loader
+    - URLSession
+    - Photos
+```
+
+15. 图片解码
+
+```
+Image/IO
+```
+
+16. 指针混淆
+
+```
+代码混淆
+
+iOS程序可以通过class-dump、Hopper、IDA等获取类名、方法名、以及分析程序的执行逻辑
+如果进行代码混淆，可以加大别人的分析难度
+
+iOS的代码混淆方案
+- 源码的混淆
+  - 类名
+  - 方法名
+  - 协议名
+
+- LLVM中间代码IR混淆
+  - 自己编写Pass
+
+- 宏定义的混淆
+  - 注意点:
+    - 不能混淆系统方法
+    - 不能混淆init开头的初始化方法
+    - 混淆属性时需要额外注意set方法
+    - 如果xib, storyboard中用到了混淆的内容, 需要手动修正
+    - 可以考虑把需要混淆的符号都加上前缀, 跟系统自带的符号做区分
+    - 混淆过多可能会被AppStore拒绝上架, 需要说明用途
+
+  - 建议
+    - 给需要混淆的符号加上一个特定的前缀
+
+- 字符串加密
+  - 很多时候, 可执行文件中的字符串信息, 对破解者来说非常关键, 是破解的途径之一
+  - 为了加大破解, 逆向难度, 可以考虑对字符串进行加密
+  - 字符串的加密技术有很多种, 可以根据自己的需要自行定制算法
+  - 这里举一个简单的例子
+    - 对每个字符进行异或(^)处理
+    - 需要使用字符串时, 对异或(^)过的字符再进行一次异或(^), 就可以获得原字符
+```
+
 17. TagPointer
-18. NSString 为什么用 copy 修饰 -
-19. 重写 isEqual 方法，hash 方法的作用，引出 NSSet 的读写效率比较高 -
+
+```
+用指针存储小对象
+
+从64bit开始，iOS引入了Tagged Pointer技术，用于优化NSNumber、NSDate、NSString等小对象的存储
+
+在没有使用Tagged Pointer之前， NSNumber等对象需要动态分配内存、维护引用计数等，NSNumber指针存储的是堆中NSNumber对象的地址值
+
+使用Tagged Pointer之后，NSNumber指针里面存储的数据变成了:Tag + Data，也就是将数据直接存储在了指针中
+
+当指针不够存储数据时，才会使用动态分配内存的方式来存储数据
+
+objc_msgSend能识别Tagged Pointer，比如NSNumber的intValue方法，直接从指针提取数据，节省了以前的调用开销
+```
+
+18. NSString 为什么用 copy 修饰
+
+```
+答案: 保持传入字符串的的不可变性
+如果传入的是NSMutableString, 使用时不会被更改, 更安全
+如果用 strong 修饰的话, 可能会在外部修改内部的值
+```
+
+19. 重写 isEqual 方法，hash 方法的作用，引出 NSSet 的读写效率比较高
+
+```
+答案;
+
+isEqual 方法用于比较元素相等
+hash 方法用于减少哈希碰撞
+
+NSSet 底层是哈希表,使用hash进行散列到对应的槽, 再使用isEqual来判断, 链表法
+```
+
 20. performselector 和直接调用方法哪个执行快
+
+```
+答案 直接调用更快, performselector会执行额外的消息发送机制
+
+performSelector: withObject:是在iOS中的一种方法调用方式。他可以向一个对象传递任何消息，而不需要在编译的时候声明这些方法。所以这也是runtime的一种应用方式.所以performSelector和直接调用方法的区别就在与runtime。
+
+- 直接调用编译是会自动校验。如果方法不存在，那么直接调用 在编译时候就能够发现，编译器会直接报错。
+- 但是使用performSelector的话一定是在运行时候才能发现，如果此方法不存在就会崩溃。
+```
+
 21. 为什么一个线程只能有一个 runloop
+
+```
+答案:
+
+从底层数据结构来看, runloop 持有一个 thread, 一对一关系, 主线程默认开启Runloop
+从功能设计来看, 一个线程设计成只有一个RunLoop, 是因为RunLoop里面有一个无限循环.
+```
+
 22. 子线程的 runloop 开启后，如果不做任何操作，线程会被杀死吗？
 
 ```
 答案: 会
 
 如果Mode里没有任何Source0/Source1/Timer/Observer，RunLoop会立马退出
-
 ```
 
 23. load 方法是在什么时候调用的
@@ -654,14 +703,194 @@ load、initialize方法的区别什么?它们在category中的调用的顺序?�
 ```
 
 25. repeated 的 NSTimer 有什么性能问题
-26. 算法：二叉树的左右子树交换代码实现； -
-27. 页面路由如何实现，如何去维护一张路由表；页面是如何去进行跳转的（runtime）；路由表中的键和值分别是什么？如何根据服务器下发的数据加载页面； -
-28. js 和 OC 如何调用；（js 是怎样调用 oc 的）；-
+
+```
+答案: 可能会造成内存泄漏
+
+NSTimer涉及到内存泄漏，主要是指在Timer中repeats为YES，
+即需要间隔指定时间，重复调用方法，此时需要手动调用[self.timer invalidate]使定时器失效。
+
+如果repeats为NO，则不存在内存泄漏问题，调用完成后，定时器会自动失效。
+
+解决办法:
+
+1. viewWillDisappear:手动停止
+  - 需要注意在这个方法中停止，适用于不会从当前页面push出下一个页面的情况，因为如果push出下一个页面，也会调用viewWillDisappear:，可能就得不到正确的结果。
+2. 重写返回方法手动停止
+3. iOS10之后，系统提供的scheduledTimerWithTimeInterval:repeats:block方法
+4. 去除NSTimer和当前调用对象之间的循环引用。 (weak target)
+```
+
+26. 算法：二叉树的左右子树交换代码实现；
+
+```cpp
+struct TreeNode* invertTree(struct TreeNode* root) {
+    if (root == NULL) {
+        return NULL;
+    }
+    struct TreeNode* left = invertTree(root->left);
+    struct TreeNode* right = invertTree(root->right);
+    root->left = right;
+    root->right = left;
+    return root;
+}
+```
+
+27. 页面路由如何实现，如何去维护一张路由表；页面是如何去进行跳转的（runtime）；路由表中的键和值分别是什么？如何根据服务器下发的数据加载页面；
+
+```
+1. 哈希表
+2. 协议
+3. 中间者模式 CTMediator + 组件化使用 category Runtime解耦 使用 Proxy
+4. 字典树
+```
+
+28. js 和 OC 如何调用；（js 是怎样调用 oc 的）；
+
+```
+1. UIWebView (已于iOS12淘汰)
+- stringByEvaluatingJavaScript urlscheme
+- window.location.href = "ios://openPhotoGallery";
+
+2. WKWebView
+- 创建WKWebViewConfiguration对象，配置各个API对应的MessageHandler。
+- window.webkit.messageHandlers
+
+JSBridge
+```
+
 29. GCD 和 NSOperation 的区别；哪一个的复用性更好；NSOperation 的队列可以 cancel 吗，里面的任务可以 cancel 吗；
-30. block 和 self 的循环引用；到底是如何循环引用的；-
-31. SDWebImage 的缓存策略，是如何从缓存中 hit 一张图片的；使用了几级缓存；缓存如何满了如何处理，是否要设置过期时间； -
-32. 讲讲 RunLoop -
-33. 讲讲 iOS 动画，比如 CoreAnimation； -
+
+```
+GCD
+- 旨在代替NSThread等线程技术
+- 充分利用设备的多核
+
+NSOperation
+- 基于GCD(底层是GCD)
+- 比GCD多了一些更简单实用的功能 (队列的暂停和恢复以及取消)
+- 使用更加面向对象
+
+NSOperation是GCD的一层封装
+
+NSOperationQueue的复用性更好, 是GCD的面向对象的封装
+
+NSOperation 的队列可以 cancel 吗，里面的任务可以 cancel 吗；
+
+- 最重要的是无论是NSOperation的cancel还是NSOperationQueue的cancelAllOperations 都不会停止正在执行的operation，只能取消在队列中等待的operation
+```
+
+30. block 和 self 的循环引用；到底是如何循环引用的；
+
+```
+block的原理是怎样的? 本质是什么?
+- 封装了函数调用以及调用环境的OC对象, 就是闭包的一种实现
+
+__block的作用是什么?有什么使用注意点?
+
+block的属性修饰词为什么是copy?使用block有哪些使用注意?
+- block一旦没有进行copy操作，就不会在堆上
+- 使用注意:循环引用问题
+
+block在修改NSMutableArray，需不需要添加__block?
+```
+
+31. SDWebImage 的缓存策略，是如何从缓存中 hit 一张图片的；使用了几级缓存；缓存如何满了如何处理，是否要设置过期时间；
+
+![](./SDWebImage/SDWebImageSequenceDiagram.png)
+
+```
+使用了内存和磁盘的缓存:
+
+- 磁盘是时间空间维度:
+ - 时间维度: 默认过期时间是1周 // static const NSInteger kDefaultCacheMaxCacheAge = 60 * 60 * 24 * 7; // 1 week
+ - 空间维度: [SDImageCache sharedImageCache].maxCacheSize = 1024 * 1024 * 50; // 50M// 默认是没有设置
+- 内存是空间维度: 缓存满了使用LRUCache进行淘汰
+
+SDWebImage 会在每次 APP 结束的时候执行清理任务。 清理缓存的规则分两步进行。 第一步先清除掉过期的缓存文件。 如果清除掉过期的缓存之后，空间还不够。 那么就继续按文件时间从早到晚排序，先清除最早的缓存文件，直到剩余空间达到要求。
+
+@interface SDImageCache : NSObject
+
+@property (assign, nonatomic) NSInteger maxCacheAge;
+@property (assign, nonatomic) NSUInteger maxCacheSize;
+
+分别在应用进入后台和结束的时候，遍历所有的缓存文件，如果缓存文件超过 maxCacheAge 中指定的时长，就会被删除掉。
+
+同样的， maxCacheSize 控制 SDImageCache 所允许的最大缓存空间。 如果清理完过期文件后缓存空间依然没达到 maxCacheSize 的要求， 那么就会继续清理旧文件，直到缓存空间达到要求为止。
+
+上面是 maxCacheAge 的默认值，注释上写的很清楚，缓存一周。 再来看看 maxCacheSize。 翻了一遍 SDWebImage 的代码，并没有对 maxCacheSize 设置默认值。 这就意味着 SDWebImage 在默认情况下不会对缓存空间设限制。
+
+查询 Disk Cache 的时候有一个小插曲，就是如果 Disk Cache 查询成功，还会把得到的图片再次设置到 Memory Cache 中。
+
+缓存策略-SDWebImageOptions
+
+- SDWebImageRetryFailed 下载失败了会再次尝试下载 (是否要重试失败的 URL)
+- SDWebImageLowPriority 当UIScrollView等正在滚动时，延迟下载图片（放置scrollView滚动卡）
+- SDWebImageCacheMemoryOnly 只缓存到内存中，不缓存到硬盘上
+- SDWebImageProgressiveDownload 图片会一点一点慢慢显示出来（就像浏览器显示网页上的图片一样）
+- SDWebImageRefreshCached 将硬盘缓存交给系统自带的NSURLCache去处理，当同一个URL对应的图片经常更改时可以用这种策略
+```
+
+32. 讲讲 RunLoop
+
+```
+Runloop 运行逻辑
+
+1. 通知Observers: kCFRunLoopEntry
+2. 通知Observers: kCFRunLoopBeforeTimers
+3. 通知Observers: kCFRunLoopBeforeSources
+4. 处理Blocks
+5. 处理Source0 (可能会再次处理Blocks)
+6. 如果存在Source1，就跳转到第8步
+7. 通知Observers: kCFRunLoopBeforeWaiting(等待消息唤醒)
+8. 通知Observers: kCFRunLoopAfterWaiting(被某个消息唤醒)
+  1> 处理Timer
+  2> 处理GCD Async To Main Queue
+  3> 处理Source1
+9. 处理Blocks
+10. 根据前面的执行结果，决定如何操作
+  1> 回到第02步
+  2> 退出Loop
+11. 通知Observers: kCFRunLoopExit
+
+```
+
+```
+Runloop 应用范畴
+
+- 定时器(Timer)、PerformSelector
+- GCD Async Main Queue
+- 事件响应、手势识别、界面刷新
+- 网络请求
+- AutoreleasePool
+
+Runloop 基本作用
+
+- 保持程序的持续运行
+- 处理App中的各种事件(比如触摸事件、定时器事件等)
+- 节省CPU资源，提高程序性能:该做事时做事，该休息时休息
+
+Runloop 实际应用
+
+- 控制线程声明周期 (线程保活)
+- 解决NSTimer在滑动时停止工作的问题
+- 监控应用卡顿
+- 性能优化
+
+Runloop 休眠原理
+
+- mach_msg()
+- 操作系统用户态到内核态的切换
+- 内核态进程切换为不活跃
+
+//BeforeSources 和 AfterWaiting 这两个状态能够检测到是否卡顿
+if (runLoopActivity == kCFRunLoopBeforeSources || runLoopActivity == kCFRunLoopAfterWaiting) {
+  //将堆栈信息上报服务器的代码放到这里
+} //end activity
+
+```
+
+33. 讲讲 iOS 动画，比如 CoreAnimation；
 34. 屏幕上点击一个 View，事件是如何去响应的； -
 35. 深拷贝与浅拷贝；-
 36. 属性有哪些修饰符 -
@@ -681,6 +910,13 @@ load、initialize方法的区别什么?它们在category中的调用的顺序?�
 50. block 几种内存类型，如何捕获变量
 51. 注意 copy 和 mutableCopy 方法，有陷阱，
 52. @synchronized(xxx)的实现
+
+```
+- @synchronized // @synchronized是对mutex递归锁的封装
+@synchronized(obj)内部会生成obj对应的递归锁，然后进行加锁、解锁操作
+```
+
+53. atomic 实现原理。
 
 ```
 atomic
@@ -707,6 +943,6 @@ func write() {
 }
 ```
 
-53. atomic 实现原理。
 54. 实现 Power()函数
 55. TCP 的断包粘包如何避免
+56. OC 消息机制
