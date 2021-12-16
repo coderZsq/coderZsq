@@ -1,5 +1,11 @@
 ## iOS Interview
 
+0. 自我介绍
+
+```
+我先自我介绍一下，我叫朱双泉，目前就职于华润大健康板块下具体负责电商业务产品设计和开发，在就职期间分别负责iOS，前端，后端和产品的工作，对软件工程有了更加全面的视角，现在想回归技术层面，能够设计出高可用，易扩展，更符合公司商业模式的架构，体现全局思维的价值。
+```
+
 1. 两个整数相加;
 
 ```cpp
@@ -1561,3 +1567,82 @@ objc_super2 {
 
 首屏渲染后的这个阶段，主要完成的是，非首屏其他业务服务模块的初始化、监听的注册、配置文件的读取等。从函数上来看，这个阶段指的就是截止到 didFinishLaunchingWithOptions 方法作用域内执行首屏渲染之后的所有方法执行完成。简单说的话，这个阶段就是从渲染完成时开始，到 didFinishLaunchingWithOptions 方法作用域结束时结束。
 ```
+
+58. kvo 如果不 remove 会怎么样，为什么会崩溃
+
+```
+答案:
+
+iOS10以下会崩溃，iOS11以上不会崩溃
+崩溃原因: an instance of class was deallocated while key value observers were still registered with i.
+```
+
+59. kvo 会循环引用吗
+
+```
+答案:
+
+不会循环引用, observer和被观察的对象之间没有强引用关系 (猜测使用的是 weak)。
+```
+
+60. 单例对象会不会被 oom 回收
+
+```
+答案: 单例对象可以销毁, 将onceToken = 0 instance = nil
+
+但将onceToken = 0 instance = nil后需要再次 dispatch_onceToken 后才会先分配新的内存, 释放旧的内存.
+
+didReceiveMemoryWarning
+
+总结:
+(1)当应用可用内存过低导致系统发出内存警告的时候,便会触发此方法。
+(2)清除不需要的视图,满足以下两个条件:1.视图已经被创建 2.不需要在 window 上显示了
+(3)当从写此方法时,需要调用父类。调用super的didReceiveMemoryWarning只是释放controller的resouse，不会释放view。
+(4)具体过程:当系统内存不足时，首先UIViewController的didReceiveMemoryWarining 方法会被调用，而didReceiveMemoryWarining 会判断当前ViewController的view是否显示在window上，如果没有显示在window上，则didReceiveMemoryWarining 会自动将viewcontroller 的view以及其所有子view全部销毁，然后调用viewcontroller的viewdidunload方法。如果当前UIViewController的view显示在window上，则不销毁该viewcontroller的view，当然，viewDidunload也不会被调用了。
+
+iOS6.0及以上版本的内存警告处理方法：
+
+- (void)didReceiveMemoryWarning {
+    NSLog(@"didReceiveMemoryWarning");
+
+    if ([UIDevice currentDevice].systemVersion.floatValue >= 6.0) {
+        if (self.isViewLoaded && !self.view.window) {
+            self.view = nil;
+        }
+    }
+}
+```
+
+```
+方法一:
++(void)attemptDealloc{
+    [_instance release]; //mrc 需要释放,当然你就不能重写release的方法了.
+    _instance = nil;
+}
+
+
+方法二:
+1. 必须把static dispatch_once_t onceToken; 这个拿到函数体外,成为全局的.
+2.
++(void)attempDealloc{
+    onceToken = 0; // 只有置成0,GCD才会认为它从未执行过.它默认为0.这样才能保证下次再次调用shareInstance的时候,再次创建对象.
+    [_instance release];
+    _instance = nil;
+ }
+```
+
+61. 离屏渲染是怎么回事
+62. UiView 的渲染机制
+63. 反转链表前 m 个节点
+64. Block 用 weak 会怎么样
+65. 网络怎么优化能够更快
+66. iOS 对消息发送机制有做过什么优化吗
+67. 弱网下 iOS 可以做什么
+68. OOM 怎么监控
+69. Crash 怎么监控
+70. swift 方法是怎么调用的 结构体，类
+71. TLS 加密原理
+72. 网络请求发生了什么
+73. 除了 pb，还有什么其他格式
+74. 如何加快网络请求
+75. Volatile 关键字的作用
