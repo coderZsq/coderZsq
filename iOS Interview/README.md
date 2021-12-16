@@ -805,33 +805,6 @@ Block_layout : {
 ```
 
 ```
-变量捕获
-
-auto: 值传递
-static: 引用传递
-全局变量: 直接访问
-
-__block.__forwarding在copy的时候会指向堆中的__block
-```
-
-```
-block的类型
-
-- block有3种类型，可以通过调用class方法或者isa指针查看具体类型，最终都是继承自NSBlock类型
-- __NSGlobalBlock__ ( 没有访问auto变量 ) 数据区 // 什么都不做
-- __NSStackBlock__ ( 访问了auto变量 ) 栈区 // copy 从栈复制到堆
-- __NSMallocBlock__ ( __NSMallocBlock__调用了copy ) 堆区 // copy 引用计数增加
-
-block 的 copy
-- 在ARC环境下，编译器会根据情况自动将栈上的block复制到堆上，比如以下情况
-- block作为函数返回值时
-- 将block赋值给__strong指针时
-- block作为Cocoa API中方法名含有usingBlock的方法参数时
-- block作为GCD API的方法参数时
-*ARC下需要持有block, 会进行copy
-```
-
-```
 block的原理是怎样的? 本质是什么?
 - 封装了函数调用以及调用环境的OC对象, 就是闭包的一种实现
 - 本质上也是一个OC对象, 它内部也有个isa指针
@@ -1172,10 +1145,134 @@ maxConcurrent 为 1, 就是串行队列
 
 44. KVO 的实现原理，一个类的多次 kvo 会生成多个新类吗？是直接就对所有的属性都生成 kvo 的方法吗？
 
+```
+答案:
+
+不会重复创建, 但如果多次监听了相同的 "key", 是会得到多次的响应的, 不是对所有属性都生成 kvo 的方法, 仅对监听的属性生成 kvo 的方法.
+```
+
 45. http 返回码有哪些，206 返回码，断点续传
-46. https 握手原理，能确保安全吗 -
-47. runloop 原理，几种 mode -
-48. autoreleasepool 原理？如果对一个对象写了多次 autorelease，会怎样？ -
+
+```
+• 1xx:请求已接收到，需要进一步处理才能完成，HTTP1.0 不支持
+  • 100 Continue:上传大文件前使用
+    • 由客户端发起请求中携带 Expect: 100-continue 头部触发
+  • 101 Switch Protocols:协议升级使用
+    • 由客户端发起请求中携带 Upgrade: 头部触发，如升级 websocket 或者 http/2.0
+  • 102 Processing:WebDAV 请求可能包含许多涉及文件操作的子请求，需要很长时间 才能完成请求。该代码表示​​服务器已经收到并正在处理请求，但无响应可用。这样可 以防止客户端超时，并假设请求丢失
+
+• 2xx:成功处理请求
+  • 200 OK: 成功返回响应。
+  • 201 Created: 有新资源在服务器端被成功创建。
+  • 202 Accepted: 服务器接收并开始处理请求，但请求未处理完成。这样一个模 糊的概念是有意如此设计，可以覆盖更多的场景。例如异步、需要长时间处理 的任务。
+  • 203 Non-Authoritative Information:当代理服务器修改了 origin server 的 原始响应包体时(例如更换了HTML中的元素值)，代理服务器可以通过修改 200为203的方式告知客户端这一事实，方便客户端为这一行为作出相应的处理。 203响应可以被缓存。
+  • 204 No Content:成功执行了请求且不携带响应包体，并暗示客户端无需 更新当前的页面视图。
+  • 205 Reset Content:成功执行了请求且不携带响应包体，同时指明客户端 需要更新当前页面视图。
+  • 206 Partial Content:使用 range 协议时返回部分响应内容时的响应码
+  • 207 Multi-Status:RFC4918 ，在 WEBDAV 协议中以 XML 返回多个资源
+的状态。
+  • 208 Already Reported:RFC5842 ，为避免相同集合下资源在207响应码 下重复上报，使用 208 可以使用父集合的响应码。
+
+• 3xx:重定向使用 Location 指向的资源或者缓存中的资源。在 RFC2068 中规定客户端重定向次数不应超过 5 次，以防止死循环。
+  • 300 Multiple Choices:资源有多种表述，通过 300 返回给客户端后由其 自行选择访问哪一种表述。由于缺乏明确的细节，300 很少使用。
+  • 301 Moved Permanently:资源永久性的重定向到另一个 URI 中。
+  • 302 Found:资源临时的重定向到另一个 URI 中。
+  • 303 See Other:重定向到其他资源，常用于 POST/PUT 等方法的响应中。
+  • 304 Not Modified:当客户端拥有可能过期的缓存时，会携带缓存的标识 etag、时间等信息询问服务器缓存是否仍可复用，而304是告诉客户端可以 复用缓存
+  • 307 Temporary Redirect:类似302，但明确重定向后请求方法必须与原 请求方法相同，不得改变。
+  • 308 Permanent Redirect:类似301，但明确重定向后请求方法必须与原请 求方法相同，不得改变。
+
+• 4xx:客户端出现错误
+  • 400 Bad Request:服务器认为客户端出现了错误，但不能明确判断为以下哪种错误时使用此错误码。例如HTTP请求格式错误。
+  • 401 Unauthorized:用户认证信息缺失或者不正确，导致服务器无法处理请求。
+  • 407 Proxy Authentication Required:对需要经由代理的请求，认证信息未通过代理 服务器的验证
+  • 403 Forbidden:服务器理解请求的含义，但没有权限执行此请求
+  • 404 Not Found:服务器没有找到对应的资源
+  • 410 Gone:服务器没有找到对应的资源，且明确的知道该位置永久性找不到该资源
+  • 405 Method Not Allowed:服务器不支持请求行中的 method 方法
+  • 406 Not Acceptable:对客户端指定的资源表述不存在(例如对语言或者编码有要求)，服务器返回表述列表供客户端选择。
+  • 408 Request Timeout:服务器接收请求超时
+  • 409 Conflict:资源冲突，例如上传文件时目标位置已经存在版本更新的资源
+  • 411 Length Required:如果请求含有包体且未携带 Content-Length 头部，且不属于 chunk类请求时，返回 411
+  • 412 Precondition Failed:复用缓存时传递的 If-Unmodified-Since 或 If- None-Match 头部不被满足
+  • 413 Payload Too Large/Request Entity Too Large:请求的包体超出服 务器能处理的最大长度
+  • 414 URI Too Long:请求的 URI 超出服务器能接受的最大长度
+  • 415 Unsupported Media Type:上传的文件类型不被服务器支持
+  • 416 Range Not Satisfiable:无法提供 Range 请求中指定的那段包体
+  • 417 Expectation Failed:对于 Expect 请求头部期待的情况无法满足时的 响应码
+  • 421 Misdirected Request:服务器认为这个请求不该发给它，因为它没有能力 处理。
+  • 426 Upgrade Required:服务器拒绝基于当前 HTTP 协议提供服务，通过 Upgrade 头部告知客户端必须升级协议才能继续处理。
+  • 428 Precondition Required:用户请求中缺失了条件类头部，例如 If-Match
+  • 429 Too Many Requests:客户端发送请求的速率过快
+  • 431 Request Header Fields Too Large:请求的 HEADER 头部大小超过限制
+  • 451 Unavailable For Legal Reasons:RFC7725 ，由于法律原因资源不可访问
+
+• 5xx:服务器端出现错误
+  • 500 Internal Server Error:服务器内部错误，且不属于以下错误类型
+  • 501 Not Implemented:服务器不支持实现请求所需要的功能
+  • 502 Bad Gateway:代理服务器无法获取到合法响应
+  • 503 Service Unavailable:服务器资源尚未准备好处理当前请求
+  • 504 Gateway Timeout:代理服务器无法及时的从上游获得响应
+  • 505 HTTP Version Not Supported:请求使用的 HTTP 协议版本不支持
+  • 507 Insufficient Storage:服务器没有足够的空间处理请求
+  • 508 Loop Detected:访问资源时检测到循环
+  • 511 Network Authentication Required:代理服务器发现客户端需要进 行身份验证才能获得网络访问权限
+```
+
+46. https 握手原理，能确保安全吗
+
+```
+答案:
+
+- Handshake握手协议
+  - 验证通讯双方的身份
+  - 交换加解密的安全套件 // 证书信任链 (使用hash算法来做验签 私钥)
+    - 秘钥交换算法 ECDHE
+    - 身份验证算法 RSA(非对称加密) 椭圆曲线 需要随机选择两个不相等的质数
+    - 对称加密算法, 强度, 工作模式(分组)
+  - 协商加密参数
+
+TLS 1.2
+
+1. 验证身份
+2. 达成安全套件共识
+3. 传递秘钥
+4. 加密通讯
+
+1 -> Client Hello        // 发送支持的安全套件列表
+2 <- Server Hello        // 选择安全的套件列表, nginx中有一个表维护
+3 <- Server Certificates // 发送服务端的证书
+4 <- ServerKey Exchange  // 发送服务端的公钥
+5 <- Server Hello Done   // 服务端结束, 仅传递信息
+6 -> ClientKey Exchange  // 检查服务端证书, 发送客户端公钥
+7 -> CipherSpec Exchange // 生成客户端秘钥发送给服务端 (主秘钥)
+8 -> Finish              // 客户端结束, 仅传递消息
+9 <- CipherSpec Exchange // 生成服务端秘钥发送给客户端 (主秘钥)
+10 <- Finish             // 服务端结束, 仅传递消息
+```
+
+47. runloop 原理，几种 mode
+
+```
+答案:
+
+原理是 runloop 会维护一个死循环, mach_port() 函数会在内核态进行线程切换(即休眠)
+
+在底层是有5种mode, 在应用层能使用的是两种mode
+
+- kCFRunLoopDefaultMode
+- UITrackingRunLoopMode
+```
+
+48. autoreleasepool 原理？如果对一个对象写了多次 autorelease，会怎样？
+
+```
+答案:
+
+在ARC下已经不能够直接调用 autorelease, 只能添加 @autoreleasepool {}, 遵循入栈出栈逻辑.
+在MRC下多次调用 autorelease, 并不会怎样, 只会在autoreleasepoll 中 push 一个对象指针
+```
+
 49. weak table 是用的什么数据结构
 
 ```
@@ -1184,8 +1281,114 @@ maxConcurrent 为 1, 就是串行队列
 哈希表 (O1)
 ```
 
+```
+__weak objc_initWeak
+
+SideTable {
+  lock spinlock_t
+  refcnt RefcountMap (是一个存放着对象引用计数的散列表)
+  weak_table weak_table_t {
+    weak_entries {
+      entry: []
+      entry: []
+      entry: []
+    }
+  }
+}
+```
+
+```
+weak 原理
+
+一个weak变量是怎样被添加到弱引用表当中的?
+
+1. 一个被声明为__weak的一个对象指针，经过编译器的编译之后呢，会调用objc_initWeak方法。
+2. 然后经过一系列的函数调用栈，最终在这个weak_register_no_lock函数中进行弱引用变量的添加。
+3. 添加的位置是通过一个哈希算法来进行位置查找的。
+4. 如果说我们查找对应位置当中已经有了当前对象所对应的弱引用数组，就把新的弱引用变量添加到那个数组当中
+5. 如果没有的话，我们就重新创建一个弱引用数组，然后把第0个位置添加上我们最新的weak指针，后面的都初始化为0/nil
+
+__weak -> objc_initWeak(判空) -> storeWeak -> weak_unregister_no_lock
+
+storeWeak
+
+1. 如果有旧对象, 就从哈希表情取出, 没有则为空
+2. 如果有新对象, 就从哈希表中取出, 没有则为空
+3. 锁住旧表 (SideTable) 和新表  (SideTable)
+4. 如果有新对象, 获取类对象, 判断是否进行初始化
+5. 如果有旧对象, 则调用 weak_unregister_no_lock 注销 (取出弱引用表)
+6. 如果有新对象, 并且不是小对象的这种管理方式, 就设置它有弱引用的标志位
+
+weak_unregister_no_lock
+
+通过原对象指针去弱引用表中查找, 其所对应的数组entry
+ - 如果找到了弱引用数组, 把新产生的弱引用指针referrer 添加到这个数组entry里面
+ - 如果没获取到弱引用数组, 需要重新创建弱引用数组
+
+weak_entry_for_referent 查找弱引用表 哈希表查找
+```
+
+```
+dealloc
+
+1. 清除成员变量
+2. 清除关联函数
+3. 将指向当前对象的弱指针置为nil
+
+- weak_clear_no_lock()
+- weak_clear_no_lock内部会根据当前对象指针查找弱引用表,把当前对象相对应的弱引用都拿出来,是一个数组,
+- 然后遍历数组,遍历所有的弱引用指针，如果弱引用指针代表的地址就是被废弃的地址referent的话，就置为nil。
+
+清除weak变量，同时设置指向为nil。
+
+当一个对象被废弃/释放之后,weak变量是如何处理的?
+
+在调dealloc后,经过一系列的调用,在内部最终会调用弱引用清除的相关函数weak_clear_no_lock()（技术引用章节有提到）,
+weak_clear_no_lock内部会根据当前对象指针查找弱引用表,把当前对象相对应的弱引用都拿出来,是一个数组,
+然后遍历数组,遍历所有的弱引用指针，如果弱引用指针代表的地址就是被废弃的地址referent的话，就置为nil。
+
+```
+
 50. block 几种内存类型，如何捕获变量
+
+```
+变量捕获
+
+auto: 值传递
+static: 引用传递
+全局变量: 直接访问
+
+__block.__forwarding在copy的时候会指向堆中的__block
+```
+
+```
+block的类型
+
+- block有3种类型，可以通过调用class方法或者isa指针查看具体类型，最终都是继承自NSBlock类型
+- __NSGlobalBlock__ ( 没有访问auto变量 ) 数据区 // 什么都不做
+- __NSStackBlock__ ( 访问了auto变量 ) 栈区 // copy 从栈复制到堆
+- __NSMallocBlock__ ( __NSMallocBlock__调用了copy ) 堆区 // copy 引用计数增加
+
+block 的 copy
+- 在ARC环境下，编译器会根据情况自动将栈上的block复制到堆上，比如以下情况
+- block作为函数返回值时
+- 将block赋值给__strong指针时
+- block作为Cocoa API中方法名含有usingBlock的方法参数时
+- block作为GCD API的方法参数时
+*ARC下需要持有block, 会进行copy
+```
+
 51. 注意 copy 和 mutableCopy 方法，有陷阱，
+
+```
+答案:
+
+[NSXXX copy] 会进行浅拷贝, 因为不可变所以只需要一份指针, 享元模式
+[NSMutableXXX  copy] 会进行深拷贝
+[NSXXX mutablecopy] 会进行深拷贝
+[NSMutableXXX mutablecopy] 会进行深拷贝
+```
+
 52. @synchronized(xxx)的实现
 
 ```
@@ -1221,6 +1424,44 @@ func write() {
 ```
 
 54. 实现 Power()函数
+
+```go
+func myPow(x float64, n int) float64 {
+	if n == 0 { // 指数为 0
+		return 1
+	}
+	if n < 0 { // 指数为负数, 返回倒数
+		return 1 / myPow(x, -n) // 此时的 -n 为正数
+	}
+	if n%2 == 0 { // 指数为偶数
+		return myPow(x*x, n/2) // 分治
+	}
+	if n%2 != 0 { // 指数为奇数
+		return myPow(x, n-1) * x // 将其先变为偶数
+	}
+	return -1
+}
+```
+
+```go
+func myPow(x float64, n int) float64 {
+	if n < 0 { // 指数为负数, 倒数
+		x = 1 / x
+		n = -n
+	}
+	result := 1.
+	for n != 0 {
+		if n & 1 != 0 { // 位运算判断指数
+			result *= x
+		}
+		x *= x
+		n >>= 1 // (n = n / 2)
+	}
+	return result
+}
+
+```
+
 55. TCP 的断包粘包如何避免
 
 ```
@@ -1258,4 +1499,65 @@ func write() {
 ```
 
 56. OC 消息机制
+
+```
+objc_msgSend的执行流程可以分为3大阶段
+
+1. 消息发送
+
+从消息接收者的类查找方法, 找不到则逐级向上查找, 直到nil, 找到了就放到消息接受者的缓存中去
+如果是从rw中查找, 已经排序的使用2分查找, 没有排序的使用遍历查找
+
+2. 动态方法解析
+
+判断是都已经动态解析, 解析过的就直接消息转发
+如果没有解析过, 则调用 resolveInstanceMethods来进行动态解析, 并标记, 重新走消息发送流程
+@dynamic 是告诉编译器不用自动生成getter和setter的实现, 等到运行时再添加方法实现
+
+3. 消息转发
+
+消息转发两个阶段,
+1. 看是否有目标类可以承载这个消息, 如有则进行消息发送
+2. 是看是否有一致方法签名的函数可以承载这个消息, 有则调用方法
+
+如果都不能处理该消息, 会报方法找不到的错误
+
+```
+
+```
+super的本质
+
+objc_super2 {
+  receiver id 消息接收者
+  current_class Class 从哪个类开始查找
+}
+```
+
 57. iOS 启动流程
+
+```
+冷启动是指， App 点击启动前，它的进程不在系统里，需要系统新创建一个进程分配给它启动的情况。这是一次完整的启动过程。
+热启动是指 ，App 在冷启动后用户将 App 退后台，在 App 的进程还在系统里的情况下，用户重新启动进入 App 的过程，这个过程做的事情非常少。
+
+冷启动
+
+1. main() 函数执行前；
+  - 加载可执行文件（App 的.o 文件的集合）；
+  - 加载动态链接库，进行 rebase 指针调整和 bind 符号绑定；
+  - Objc 运行时的初始处理，包括 Objc 相关类的注册、category 注册、selector 唯一性检查等；
+  - 初始化，包括了执行 +load() 方法、attribute((constructor)) 修饰的函数的调用、创建 C++ 静态全局变量。
+
+  可以做的优化:
+  1. 减少动态库加载。每个库本身都有依赖关系，苹果公司建议使用更少的动态库，并且建议在使用动态库的数量较多时，尽量将多个动态库进行合并。数量上，苹果公司建议最多使用 6 个非系统动态库。
+  2. 减少加载启动后不会去使用的类或者方法。
+  3. +load() 方法里的内容可以放到首屏渲染完成后再执行，或使用 +initialize() 方法替换掉。因为，在一个 +load() 方法里，进行运行时方法替换操作会带来 4 毫秒的消耗。不要小看这 4 毫秒，积少成多，执行 +load() 方法对启动速度的影响会越来越大。
+  4. 控制 C++ 全局变量的数量。
+2. main() 函数执行后；
+  - 首屏初始化所需配置文件的读写操作；
+  - 首屏列表大数据的读取；
+  - 首屏渲染的大量计算等。
+
+3. 首屏渲染完成后。
+
+首屏渲染后的这个阶段，主要完成的是，非首屏其他业务服务模块的初始化、监听的注册、配置文件的读取等。从函数上来看，这个阶段指的就是截止到 didFinishLaunchingWithOptions 方法作用域内执行首屏渲染之后的所有方法执行完成。简单说的话，这个阶段就是从渲染完成时开始，到 didFinishLaunchingWithOptions 方法作用域结束时结束。
+```
