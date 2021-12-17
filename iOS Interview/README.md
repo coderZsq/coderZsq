@@ -135,7 +135,7 @@ kvo 的实现
 答案: 用Runtime动态生成一个子类,并让instance对象isa指向这个全新的子类
 *类似Java动态代理CGLib的设计思路, 是一种Proxy模式
 
-有没有遇到过崩溃
+有没有遇到过崩溃 iOS11及以上不会发生崩溃
 
 1. observe忘记写监听回调方法 observeValueForKeyPath
 2. add和remove次数不匹配
@@ -2064,4 +2064,16 @@ volatile可见性是通过汇编加上Lock前缀指令，触发底层的MESI缓�
 （3）volatile不能修饰写入操作依赖当前值的变量。声明为volatile的简单变量如果当前值与该变量以前的值相关，那么volatile关键字不起作用，也就是说如下的表达式都不是原子操作：“count++”、“count = count+1”。
 （4）当要访问的变量已在synchronized代码块中，或者为常量时，没必要使用volatile；
 （5）volatile屏蔽掉了JVM中必要的代码优化，所以在效率上比较低，因此一定在必要时才使用此关键字。
+```
+
+74. main 方法的@autoreleasepool 可以删除吗?
+
+```
+答案:
+
+Setup code that might create autoreleased objects goes here.
+
+老版本的runloop实际上要到程序执行到 return 才会触发自动释放，而在 iOS/macOS 中因为 RunLoop 的存在着几乎是不发生的，这意味着老版本的 @autoreleasepool 中声明的局部变量要到程序结束才会释放；
+
+对比 Xcode 11 的处理，将 @autoreleasepool 放在触发主线程 RunLoop 的 UIApplicationMain 函数外围，可以保证此处局部变量在程序启动后立即释放。这也正是模板中注释的意图。
 ```
