@@ -2,8 +2,8 @@
 
 I am a product-minded engineer from China.
 
-- 5 years of experience in software development.
-- 2 years of experience in product design.
+- 3 years of experience in software development.
+- 3 years of experience in product design.
 - Be skill in business modeling and task decomposition, having the ability to **integrate technology stack**.
 - Experienced in the pharmaceutical e-commerce industry, working as a product manager for CR J1.com, be responsible for the functionality and design of mobile products.
 
