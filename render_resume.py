@@ -26,15 +26,15 @@ WIDTH = A4[0] - 100
 styles = {}
 for key, settings in {
     'name': dict(fontSize=28, leading=34, fontName='ResumeSCBold'),
-    'role': dict(fontSize=13, leading=20, textColor=ACCENT, alignment=TA_RIGHT),
+    'role': dict(fontSize=14, leading=22, textColor=ACCENT),
     'meta': dict(fontSize=8.6, leading=14, textColor=MUTED),
     'section': dict(fontSize=11.4, leading=17, fontName='ResumeSCBold', spaceBefore=17, spaceAfter=6),
     'company': dict(fontSize=11, leading=16, fontName='ResumeSCBold'),
     'date': dict(fontSize=9, leading=16, textColor=MUTED, alignment=TA_RIGHT),
     'position': dict(fontSize=9.3, leading=15, textColor=MUTED, spaceAfter=6, keepWithNext=True),
     'project': dict(fontSize=10.5, leading=17, fontName='ResumeSCBold', spaceBefore=10, spaceAfter=7, keepWithNext=True),
-    'body': dict(fontSize=10.5, leading=18, spaceAfter=9),
-    'bullet': dict(fontSize=10.5, leading=18, leftIndent=9, firstLineIndent=-9, spaceAfter=8),
+    'body': dict(fontSize=11, leading=19, spaceAfter=9),
+    'bullet': dict(fontSize=11, leading=19, leftIndent=9, firstLineIndent=-9, spaceAfter=8),
     'skill': dict(fontSize=9.6, leading=16, spaceAfter=4),
 }.items():
     defaults = dict(fontName='ResumeSC', textColor=INK, wordWrap='CJK', splitLongWords=False)
@@ -84,7 +84,7 @@ def page(canvas, doc):
 
 lines = [line.strip() for line in SOURCE.read_text(encoding='utf-8').splitlines() if line.strip()]
 story = []
-header = Table([[para('朱双泉', 'name'), para('全栈工程师', 'role')]], colWidths=[WIDTH*.45, WIDTH*.55])
+header = Table([[para('朱双泉', 'name'), para('全栈工程师', 'role')]], colWidths=[108, WIDTH-108])
 header.setStyle(TableStyle([('LEFTPADDING',(0,0),(-1,-1),0),('RIGHTPADDING',(0,0),(-1,-1),0),('BOTTOMPADDING',(0,0),(-1,-1),0),('VALIGN',(0,0),(-1,-1),'BOTTOM')]))
 story += [header, Spacer(1, 9)]
 for line in lines[1:4]:
@@ -97,13 +97,12 @@ continued = False
 i = 4
 while i < len(lines):
     line = lines[i]
-    if line.startswith('### 上海傲文'):
+    if line == '## 工作与项目经历（续）':
         continued = True
         story.append(PageBreak())
-        story += section('工作与项目经历（续）')
     if line.startswith('## '):
         title=line[3:]
-        in_skills = title == '技术与能力'
+        in_skills = title == '技术实践'
         story += section(title)
     elif line.startswith('### '):
         company, position = line[4:].split(' | ',1)
@@ -115,11 +114,11 @@ while i < len(lines):
         i += 1
     elif line.startswith('**项目：'):
         story.append(para(line.replace('项目：','',1),'project'))
+    elif line.startswith('**') and line.endswith('**'):
+        story.append(para(line, 'project'))
     elif line.startswith('- '):
         if in_skills:
-            text=line[2:]
-            label, body=text.split('：',1)
-            story.append(para('**'+label+'**：'+body,'skill'))
+            story.append(para(line[2:], 'skill'))
         else:
             story.append(Paragraph('<font color="#98543f">&#8226;</font> '+inline(line[2:]),styles['bullet']))
     else:
